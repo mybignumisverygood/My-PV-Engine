@@ -1,0 +1,33 @@
+body{
+	margin: 0;
+	overflow: hidden;
+}
+
+svg{
+	width: 100%;
+	height: 100%;
+}
+
+#m{
+	animation: test1 10s linear both infinite;
+	position: absolute;
+	offset-path: path("M0,0 H2000");
+	offset-rotate: auto; 
+	font-family: "Yu Mincho";
+	font-size: 20px;
+}
+
+@keyframes test1{
+	100% {
+		transform: translateX(100vw);
+	}
+}
+
+p{
+	display : block;
+	position : absolute;
+	margin : 0px;
+	user-select : none;
+	left: 0px;
+	top: 0px;
+}
