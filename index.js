@@ -129,33 +129,33 @@ const deg = Math.PI / 180;
 
 class Line extends ShapeObject{ // x, y 属性可以为空
 	static tag = "line";
-	static translate_dict = {x1 : "x1", y1 : "y1", x2 : "x2", y2 : "y2", color : "stroke", size : "stroke-width"};
+	static translate_dict = {x : "x1", y : "y1", dx : "x2", dy : "y2", color : "stroke", size : "stroke-width"};
 
 	constructor(attr){
 		attr = attr || {};
 		super(attr);
-		this.x1 = this.x = attr.x1 ?? 0;
-		this.y1 = this.y = attr.y1 ?? 0;
-		this.x2 = attr.x2 ?? 0;
-		this.y2 = attr.y2 ?? 0;
+		this.x = attr.x ?? 0;
+		this.y = attr.y ?? 0;
+		this.dx = attr.dx ?? 0; // x2 = x1 + dx = x + dx
+		this.dy = attr.dy ?? 0; // y2 = y1 + dy = y + dy
 	}
 
-	byAngleLength(data){ // {x:..., y:..., theta:..., length:...}, 角度制, 以浏览器底部为 x 轴逆时针计算
-		const rad = -data.theta * deg; // HTML 页面的 y 轴是反着来的……哈哈
-		[this.x1, this.y1, this.x2, this.y2] = [data.x, data.y, data.x + data.length * Math.cos(rad), data.y + data.length * Math.sin(rad)];
-		return this;
-	}
+	// byAngleLength(data){ // {x:..., y:..., theta:..., length:...}, 角度制, 以浏览器底部为 x 轴逆时针计算
+	// 	const rad = -data.theta * deg; // HTML 页面的 y 轴是反着来的……哈哈
+	// 	[this.x1, this.y1, this.x2, this.y2] = [data.x, data.y, data.x + data.length * Math.cos(rad), data.y + data.length * Math.sin(rad)];
+	// 	return this;
+	// }
 
 	byEndpoint(data){ // {x1:..., y1:..., x2:..., y2:...}, 最简单的, 接收两端点坐标
-		[this.x1, this.y1, this.x2, this.y2] = [data.x1, data.y1, data.x2, data.y2];
+		[this.x, this.y, this.dx, this.dy] = [data.x1, data.y1, data.x2 - data.x1, data.y2 - data.y1];
 		return this;
 	}
 
-	byScale(data){ // {obj:..., scale:..., x, y}, obj 处接收一个 Line 对象, 将它缩放 scale 倍, 起始顶点变为 (x, y)
-		[this.x1, this.y1, this.x2, this.y2] = [data.x, data.y, 
-												data.x + (data.obj.x2 - data.obj.x1) * data.scale, data.y + (data.obj.y2 - data.obj.y1) * data.scale];
-		return this;
-	}
+	// byScale(data){ // {obj:..., scale:..., x, y}, obj 处接收一个 Line 对象, 将它缩放 scale 倍, 起始顶点变为 (x, y)
+	// 	[this.x1, this.y1, this.x2, this.y2] = [data.x, data.y, 
+	// 											data.x + (data.obj.x2 - data.obj.x1) * data.scale, data.y + (data.obj.y2 - data.obj.y1) * data.scale];
+	// 	return this;
+	// }
 
 	getLength(){
 		return Math.sqrt((this.x2 - this.x1) ** 2 + (this.y2 - this.y1) ** 2);
@@ -166,21 +166,26 @@ class Line extends ShapeObject{ // x, y 属性可以为空
 	}
 	
 	applyAttr(attr, val){
-		
+		let new_val = val;
+		switch (attr){
+			case "dx": new_val += this.x; break;
+			case "dy": new_val += this.y; break;
+			case "size": new_val += "px"; break;
+			default: break;
+		}
+		this.el.setAttribute(Line.translate_dict[attr], new_val);
 	}
 
 	update(update_attr){
-		const style_dict = {x1 : update_attr.x1, y1 : update_attr.y1, x2 : update_attr.x2, y2 : update_attr.y2, stroke : update_attr.color, 
-							  "stroke-width" : update_attr.size + "px"};
-		const entries = Object.keys(update_attr);
-		for (let i = 0; i < entries.length; i++){
-			let translated_attr = Line.translate_dict[entries[i]];
-			if (translated_attr){
-				this.el.setAttribute(translated_attr, style_dict[translated_attr]);
-				this[entries[i]] = update_attr[entries[i]];
+		const keys = Object.keys(update_attr);
+		for (let i = 0; i < keys.length; i++){
+			let attr = keys[i];
+			if (Line.translate_dict[attr]){
+				const val = update_attr[attr];
+				this.applyAttr(attr, val);
+				this[attr] = val;
 			}
 		}
-		this.x = this.x1; this.y = this.y1;
 		return this;
 	}
 }
