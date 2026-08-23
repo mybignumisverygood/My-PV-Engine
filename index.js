@@ -1,6 +1,8 @@
 'use strict';
 
 class BaseProp {
+	static translate_dict = { x: 'x', y: 'y' };
+
 	constructor(attr = {}) {
 		this.x = attr.x || 0; // 元素相对于父容器的基准点
 		this.y = attr.y || 0; // 同上
@@ -47,7 +49,10 @@ class BaseProp {
 		// NS 目前仅在绘制 svg 时候传入
 		this.el = NS ? document.createElementNS(NS, tag) : document.createElement(tag); // 我出生了
 		// 绑定监听器, 鼠标拖拽用, 仅测试用
-		this.el.addEventListener('mousedown', this.#mdown);
+		if (this.el.nodeName !== 'DIV' && this.el.nodeName !== 'g') {
+			// 不给 Group 绑定, 要不然有的元素可能会更新两次
+			this.el.addEventListener('mousedown', this.#mdown);
+		}
 		return this.el;
 	}
 
@@ -61,8 +66,21 @@ class BaseProp {
 		};
 	}
 
+	applyAttr(attr, val) {
+		switch (attr) {
+			case 'x':
+				this.el.style.transform = `translate(${val}px, ${this.y}px) `;
+				break;
+			case 'y':
+				this.el.style.transform = `translate(${this.x}px, ${val}px) `;
+				break;
+			default:
+				break;
+		}
+	}
+
 	update(update_attr) {
-		// 从 update_attr 中获取属性并更新
+		// 传入的仅仅是要修改的参数, 例如 a.update({x : 100, y : 200}) 只会修改位置, 不会修改其它
 		const keys = Object.keys(update_attr);
 		for (let i = 0; i < keys.length; i++) {
 			const attr = keys[i];
@@ -116,9 +134,8 @@ class TextObject extends BaseProp {
 	}
 
 	update(update_attr) {
-		// 传入的仅仅是要修改的参数, 例如 a.update({x : 100, y : 200}) 只会修改位置, 不会修改其它
 		if (update_attr.content != null) this.el.textContent = this.content = update_attr.content;
-		super.update(this);
+		super.update(update_attr);
 	}
 }
 
@@ -300,12 +317,39 @@ class Group {
 
 	add(el) {
 		for (let i = 0; i < el.length; i++) {
-			el[i] instanceof ShapeObject
-				? (this.svg_group.el.appendChild(el[i].el), (el[i].parent = this.svg_group.el))
-				: (this.regular_group.el.appendChild(el[i].el), (el[i].parent = this.regular_group.el));
+			if (el[i] instanceof ShapeObject) {
+				this.svg_group.el.appendChild(el[i].el);
+				el[i].parent = this.svg_group;
+			} else {
+				this.regular_group.el.appendChild(el[i].el);
+				el[i].parent = this.regular_group;
+			}
 		}
 	}
+
+	remove(el) {
+		for (let i = 0; i < el.length; i++) {
+			if (el[i] instanceof ShapeObject) {
+				this.svg_group.el.removeChild(el[i].el);
+				shape_canvas.appendChild(el[i].el);
+				el[i].parent = document.body;
+			} else {
+				this.regular_group.el.removeChild(el[i].el);
+				document.body.appendChild(el[i].el);
+				el[i].parent = shape_canvas;
+			}
+		}
+	}
+
+	update(attr) {
+		this.regular_group.update(attr);
+		this.svg_group.update(attr);
+		return this;
+	}
 }
+
+// 最伟大的设计! 时间轴!
+class Timeline {}
 
 // 测试用
 let a = new TextObject({ x: 100, y: 400, content: '你好' });
