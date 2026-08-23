@@ -349,7 +349,11 @@ class Group {
 }
 
 // 最伟大的设计! 时间轴!
-class Timeline {}
+class Timeline {
+	constructor() {}
+	to() {}
+	at() {}
+}
 
 // 测试用
 let a = new TextObject({ x: 100, y: 400, content: '你好' });
