@@ -1,12 +1,12 @@
 'use strict';
 
 class BaseProp {
-	static translate_dict = { x: 'x', y: 'y' };
+	static translate_dict = { x: 'x', y: 'y', opacity: 'opacity' };
 
 	constructor(attr = {}) {
 		this.x = attr.x || 0; // 元素相对于父容器的基准点
 		this.y = attr.y || 0; // 同上
-		// this.opacity = attr.opacity ?? 1; // 透明度
+		this.opacity = attr.opacity ?? 1; // 透明度
 		this.parent = attr.parent || document.body; // 父节点, 在分组时候会有用
 	}
 
@@ -105,7 +105,7 @@ class TextObject extends BaseProp {
 
 	constructor(attr = {}) {
 		super(attr);
-		this.content = attr.content ?? '键入文本';
+		this.content = attr.content ?? '大江東去浪淘尽';
 		this.font = attr.font || 'Yu Mincho'; // 好看的游明朝体
 		this.size = attr.size ?? 20; // 单位 px
 	}
@@ -327,7 +327,7 @@ class Group {
 		}
 	}
 
-	remove(el) {
+	remove(el, inheritance = true) {
 		for (let i = 0; i < el.length; i++) {
 			if (el[i] instanceof ShapeObject) {
 				this.svg_group.el.removeChild(el[i].el);
@@ -338,6 +338,10 @@ class Group {
 				document.body.appendChild(el[i].el);
 				el[i].parent = shape_canvas;
 			}
+			if (inheritance) {
+				// 若是选择继承群组的属性
+				this.combine(el[i] instanceof ShapeObject ? this.svg_group : this.regular_group, el[i]);
+			}
 		}
 	}
 
@@ -346,14 +350,69 @@ class Group {
 		this.svg_group.update(attr);
 		return this;
 	}
+
+	combine(group, obj) {
+		// 计算一个组和一个组内普通对象 m 的属性应用在 m 上的等价结合属性值
+		const keys = Object.keys(group);
+		let combined_dict = {};
+		for (let i = 0; i < keys.length; i++) {
+			if (BaseProp.translate_dict[keys[i]] == null) {
+				continue;
+			}
+			let group_val = group[keys[i]],
+				obj_val = obj[keys[i]];
+			switch (keys[i]) {
+				case 'x': // fall through
+				case 'y':
+					combined_dict[keys[i]] = group_val + obj_val;
+					break;
+				case 'opacity':
+					combined_dict[keys[i]] = group_val * obj_val;
+					break;
+				default:
+					combined_dict[keys[i]] = group_val;
+			}
+		}
+		obj.update(combined_dict);
+		return obj;
+	}
 }
+
+let frames_cnt = 0;
 
 // 最伟大的设计! 时间轴!
 class Timeline {
 	constructor() {}
 	to() {}
-	at() {}
+	at(start, recall) {
+		oprations.push([start, recall]);
+		return oprations;
+	}
+	subTimeline() {
+
+	}
 }
+
+let global_timeline = new Timeline();
+let oprations = [];
+let load_time, ms_cnt, opration_idx = 0;
+
+function loop(){
+	if (frames_cnt === 0){load_time = performance.now();}
+	ms_cnt = performance.now() - load_time;
+	frames_cnt++;
+	while (oprations[opration_idx][0] <= ms_cnt){
+		oprations[opration_idx][1]();
+		console.log("frame: ", frames_cnt);
+		opration_idx++;
+	}
+	requestAnimationFrame(loop);
+}
+
+global_timeline.at(3000, ()=>{console.log(1)});
+global_timeline.at(4000, ()=>{console.log(2)});
+global_timeline.at(3000, ()=>{console.log(3)});
+global_timeline.at(2000, ()=>{console.log(4)});
 
 // 测试用
 let a = new TextObject({ x: 100, y: 400, content: '你好' });
@@ -374,3 +433,7 @@ e.draw();
 
 let f = new Group();
 f;
+
+oprations.sort((a, b) => a[0] - b[0]);
+oprations.push(0); // 利用 0 没有索引值, 所以 loop 内部的 while 判断条件在此时会返回 false
+loop();
