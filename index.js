@@ -53,17 +53,7 @@ class BaseProp {
 			// 不给 Group 绑定, 要不然有的元素可能会更新两次
 			this.el.addEventListener('mousedown', this.#mdown);
 		}
-		return this.el;
-	}
-
-	getExactPosition() {
-		// 获取元素相对于页面的实际坐标
-		if (!this.parent.getExactPosition) return { x: this.x, y: this.y };
-		const parent_exact_position = this.parent.getExactPosition();
-		return {
-			x: this.x + parent_exact_position.x,
-			y: this.y + parent_exact_position.y
-		};
+		return this;
 	}
 
 	applyAttr(attr, val) {
@@ -92,6 +82,34 @@ class BaseProp {
 		}
 		return this;
 	}
+
+	hide() {
+		this.el.style.display = 'none';
+		return this;
+	}
+
+	display() {
+		this.el.style.display = 'block';
+		return this;
+	}
+
+	getExactPosition() {
+		// 获取元素相对于页面的实际坐标
+		if (!this.parent.getExactPosition) return { x: this.x, y: this.y };
+		const parent_exact_position = this.parent.getExactPosition();
+		return {
+			x: this.x + parent_exact_position.x,
+			y: this.y + parent_exact_position.y
+		};
+	}
+
+	getWidth() {
+		return this.el.getBoundingClientRect().width;
+	}
+
+	getHeight() {
+		return this.el.getBoundingClientRect().height;
+	}
 }
 
 class TextObject extends BaseProp {
@@ -114,6 +132,7 @@ class TextObject extends BaseProp {
 		super.init(TextObject.tag);
 		this.update(this);
 		this.parent.appendChild(this.el);
+		return this;
 	}
 
 	applyAttr(attr, val) {
@@ -163,6 +182,7 @@ class ShapeObject extends BaseProp {
 		super.init(this.constructor.tag, svgNS);
 		this.update(this);
 		this.parent.appendChild(this.el);
+		return this;
 	}
 }
 
@@ -188,33 +208,6 @@ class Line extends ShapeObject {
 		this.line_cap = attr.line_cap || 'butt';
 	}
 
-	byAngleLength(data) {
-		// {x:..., y:..., theta:..., length:...}, 角度制, 以浏览器底部为 x 轴逆时针计算
-		const rad = -data.theta * deg; // HTML 页面的 y 轴是反着来的……哈哈
-		[this.x, this.y, this.dx, this.dy] = [data.x, data.y, data.length * Math.cos(rad), data.length * Math.sin(rad)];
-		return this;
-	}
-
-	byEndpoints(data) {
-		// {x1:..., y1:..., x2:..., y2:...}, 最简单的, 接收两端点坐标
-		[this.x, this.y, this.dx, this.dy] = [data.x1, data.y1, data.x2 - data.x1, data.y2 - data.y1];
-		return this;
-	}
-
-	byScale(data) {
-		// {obj:..., scale:..., x, y}, obj 处接收一个 Line 对象, 将它缩放 scale 倍, 起始顶点变为 (x, y)
-		[this.x, this.y, this.dx, this.dy] = [data.x, data.y, data.obj.dx * data.scale, data.obj.dy * data.scale];
-		return this;
-	}
-
-	getLength() {
-		return Math.sqrt(this.dx ** 2 + this.dy ** 2);
-	}
-
-	getTheta() {
-		return Math.atan2(-this.dy, this.dx) / deg;
-	}
-
 	applyAttr(attr, val) {
 		let new_val = val;
 		switch (attr) {
@@ -237,6 +230,33 @@ class Line extends ShapeObject {
 				break;
 		}
 		this.el.setAttribute(Line.translate_dict[attr], new_val);
+	}
+
+	byAngleLength(x, y, theta, length) {
+		// 角度制, 以浏览器底部为 x 轴逆时针计算
+		const rad = -theta * deg; // HTML 页面的 y 轴是反着来的……哈哈
+		[this.x, this.y, this.dx, this.dy] = [x, y, length * Math.cos(rad), length * Math.sin(rad)];
+		return this;
+	}
+
+	byEndpoints(x1, y1, x2, y2) {
+		// 最简单的, 接收两端点坐标
+		[this.x, this.y, this.dx, this.dy] = [x1, y1, x2 - x1, y2 - y1];
+		return this;
+	}
+
+	byScale(obj, scale, x, y) {
+		// obj 处接收一个 Line 对象, 将它缩放 scale 倍, 起始顶点变为 (x, y)
+		[this.x, this.y, this.dx, this.dy] = [x, y, obj.dx * scale, obj.dy * scale];
+		return this;
+	}
+
+	getLength() {
+		return Math.sqrt(this.dx ** 2 + this.dy ** 2);
+	}
+
+	getTheta() {
+		return Math.atan2(-this.dy, this.dx) / deg;
 	}
 }
 
@@ -262,33 +282,33 @@ class Circle extends ShapeObject {
 		return new Circle({ x: x, y: y, r: r });
 	}
 
-	byCenterRadius(data) {
-		// {x:..., y:..., r:...}, 甚至比 Line 的 byEndPoints 还要简单…… 理想状况是根本不会用到
-		[this.x, this.y, this.r] = [data.x, data.y, data.r];
-		return this;
-	}
-
-	byThreePoints(data) {
-		// {x1:..., y1:..., x2:..., y2:..., x3:..., y3:...}, 目前最难的一个, 接收三点坐标确定一个圆
-		const dx1 = data.x3 - data.x2,
-			dx2 = data.x1 - data.x3,
-			dx3 = data.x2 - data.x1;
-		const dy1 = data.y2 - data.y3,
-			dy2 = data.y3 - data.y1,
-			dy3 = data.y1 - data.y2;
-		const det = 2 * (data.x1 * dy1 + data.x2 * dy2 + data.x3 * dy3);
-		const p1 = data.x1 ** 2 + data.y1 ** 2,
-			p2 = data.x2 ** 2 + data.y2 ** 2,
-			p3 = data.x3 ** 2 + data.y3 ** 2;
-		const centerX = (p1 * dy1 + p2 * dy2 + p3 * dy3) / det;
-		const centerY = (p1 * dx1 + p2 * dx2 + p3 * dx3) / det;
-		const r = Math.sqrt((centerX - data.x1) ** 2 + (centerY - data.y1) ** 2);
-		[this.x, this.y, this.r] = [centerX, centerY, r];
-		return this;
-	}
-
 	applyAttr(attr, val) {
 		this.el.setAttribute(Circle.translate_dict[attr], val);
+	}
+
+	byCenterRadius(x, y, r) {
+		// 甚至比 Line 的 byEndPoints 还要简单…… 理想状况是根本不会用到
+		[this.x, this.y, this.r] = [x, y, r];
+		return this;
+	}
+
+	byThreePoints(x1, y1, x2, y2, x3, y3) {
+		// 目前最难的一个, 接收三点坐标确定一个圆
+		const dx1 = x3 - x2,
+			dx2 = x1 - x3,
+			dx3 = x2 - x1;
+		const dy1 = y2 - y3,
+			dy2 = y3 - y1,
+			dy3 = y1 - y2;
+		const det = 2 * (x1 * dy1 + x2 * dy2 + x3 * dy3);
+		const p1 = x1 ** 2 + y1 ** 2,
+			p2 = x2 ** 2 + y2 ** 2,
+			p3 = x3 ** 2 + y3 ** 2;
+		const centerX = (p1 * dy1 + p2 * dy2 + p3 * dy3) / det;
+		const centerY = (p1 * dx1 + p2 * dx2 + p3 * dx3) / det;
+		const r = Math.sqrt((centerX - x1) ** 2 + (centerY - y1) ** 2);
+		[this.x, this.y, this.r] = [centerX, centerY, r];
+		return this;
 	}
 }
 
@@ -325,29 +345,6 @@ class Group {
 				el[i].parent = this.regular_group;
 			}
 		}
-	}
-
-	remove(el, inheritance = true) {
-		for (let i = 0; i < el.length; i++) {
-			if (el[i] instanceof ShapeObject) {
-				this.svg_group.el.removeChild(el[i].el);
-				shape_canvas.appendChild(el[i].el);
-				el[i].parent = document.body;
-			} else {
-				this.regular_group.el.removeChild(el[i].el);
-				document.body.appendChild(el[i].el);
-				el[i].parent = shape_canvas;
-			}
-			if (inheritance) {
-				// 若是选择继承群组的属性
-				this.combine(el[i] instanceof ShapeObject ? this.svg_group : this.regular_group, el[i]);
-			}
-		}
-	}
-
-	update(attr) {
-		this.regular_group.update(attr);
-		this.svg_group.update(attr);
 		return this;
 	}
 
@@ -376,56 +373,128 @@ class Group {
 		obj.update(combined_dict);
 		return obj;
 	}
-}
 
-let frames_cnt = 0;
+	remove(el, inheritance = true) {
+		for (let i = 0; i < el.length; i++) {
+			if (el[i] instanceof ShapeObject) {
+				this.svg_group.el.removeChild(el[i].el);
+				shape_canvas.appendChild(el[i].el);
+				el[i].parent = document.body;
+			} else {
+				this.regular_group.el.removeChild(el[i].el);
+				document.body.appendChild(el[i].el);
+				el[i].parent = shape_canvas;
+			}
+			if (inheritance) {
+				// 若是选择继承群组的属性
+				this.combine(el[i] instanceof ShapeObject ? this.svg_group : this.regular_group, el[i]);
+			}
+		}
+		return this;
+	}
+
+	update(attr) {
+		this.regular_group.update(attr);
+		this.svg_group.update(attr);
+		return this;
+	}
+}
 
 // 最伟大的设计! 时间轴!
 class Timeline {
 	constructor() {}
 	to() {}
-	at(start, recall) {
-		oprations.push([start, recall]);
-		return oprations;
+	add(start, duration, recall, anim_id) {
+		anims.push({ start: start, duration: duration, recall: recall, anim_id: anim_id });
+		return anims;
 	}
-	subTimeline() {
-
+	subTimeline() {}
+	static pause() {
+		cancelAnimationFrame(loop_id);
 	}
 }
 
 let global_timeline = new Timeline();
-let oprations = [];
-let load_time, ms_cnt, opration_idx = 0;
+let load_time,
+	frames_cnt = 0,
+	ms_cnt = 0,
+	anims = [],
+	idx_tail = 0,
+	ms_text = new TextObject({ x: window.innerWidth - 200, y: 20, content: '0 0ms' }).draw(), // debug 用
+	loop_id;
 
-function loop(){
-	if (frames_cnt === 0){load_time = performance.now();}
-	ms_cnt = performance.now() - load_time;
-	frames_cnt++;
-	while (oprations[opration_idx][0] <= ms_cnt){
-		oprations[opration_idx][1]();
-		console.log("frame: ", frames_cnt);
-		opration_idx++;
+function loop() {
+	if (frames_cnt === 0) {
+		load_time = performance.now();
 	}
-	requestAnimationFrame(loop);
+	ms_cnt = performance.now() - load_time;
+	ms_text.update({ content: `${frames_cnt} ${ms_cnt.toFixed(1)}ms` }); // debug 用
+	frames_cnt++;
+	while (anims[idx_tail].start <= ms_cnt) {
+		console.log('frame: ', frames_cnt);
+		anims[idx_tail].anim_id.temp_obj = { ...anims[idx_tail].anim_id.args.obj };
+		idx_tail++;
+	}
+	for (let i = 0; i < idx_tail; i++) {
+		if (anims[i].start + anims[i].duration < ms_cnt) {
+			anims[i].anim_id.progress = 1;
+			anims[i].recall(anims[i].anim_id.temp_obj);
+			anims.splice(i, 1);
+			idx_tail--;
+			i--;
+			continue;
+		}
+		anims[i].anim_id.progress = (ms_cnt - anims[i].start) / anims[i].duration;
+		anims[i].recall(anims[i].anim_id.temp_obj);
+	}
+	loop_id = requestAnimationFrame(loop);
 }
 
-global_timeline.at(3000, ()=>{console.log(1)});
-global_timeline.at(4000, ()=>{console.log(2)});
-global_timeline.at(3000, ()=>{console.log(3)});
-global_timeline.at(2000, ()=>{console.log(4)});
+// 引擎的灵魂
+class Anim {
+	constructor(attr) {
+		// this.playing = false; // 是否正在播放
+		this.progress = attr.progress || 0;
+		this.animation = attr.animation || undefined;
+		this.args = attr.args || {};
+		this.temp_obj = attr.temp_obj || undefined;
+	}
+
+	static customize(start, recall, duration = 0) {
+		global_timeline.at(start, recall, duration);
+		return;
+	}
+
+	static translate(start, duration, to, obj) {
+		let r_anim = new Anim({ animation: Anim.translate, args: { start: start, duration: duration, to: to, obj: obj } });
+		global_timeline.add(
+			start,
+			duration,
+			(temp) => {
+				obj.update({ x: temp.x + (to[0] - temp.x) * r_anim.progress, y: temp.y + (to[1] - temp.y) * r_anim.progress });
+			},
+			r_anim
+		);
+		return r_anim;
+	}
+
+	static mojibake(start, to, speed, obj, duration) {
+		return [start, to, speed, obj, duration];
+	}	
+}
 
 // 测试用
 let a = new TextObject({ x: 100, y: 400, content: '你好' });
 a.draw();
 a.update({ content: '我是洛一' });
 
-let b = new Line().byEndpoints({ x1: 100, y1: 100, x2: 200, y2: 200 });
+let b = new Line().byEndpoints(100, 100, 200, 200);
 b.draw();
 
-let c = new Line().byAngleLength({ x: 100, y: 100, theta: 60, length: 100 });
+let c = new Line().byAngleLength(100, 100, 60, 100);
 c.draw();
 
-let d = new Circle({ color: 'red' }).byCenterRadius({ x: 100, y: 100, r: 100 });
+let d = new Circle({ color: 'red' }).byCenterRadius(100, 100, 100);
 d.draw();
 
 let e = Circle.dot(100, 400);
@@ -434,6 +503,29 @@ e.draw();
 let f = new Group();
 f;
 
-oprations.sort((a, b) => a[0] - b[0]);
-oprations.push(0); // 利用 0 没有索引值, 所以 loop 内部的 while 判断条件在此时会返回 false
+let mouse_debugger = false,
+	mouse_pos_dot = Circle.dot().draw().hide(),
+	mouse_pos_text = new TextObject().draw().hide();
+
+document.addEventListener('keydown', (e) => {
+	if (e.key === 'Control') {
+		mouse_debugger = !mouse_debugger;
+	}
+	if (!mouse_debugger) {
+		mouse_pos_dot.hide();
+		mouse_pos_text.hide();
+	}
+});
+document.addEventListener('mousedown', (e) => {
+	if (mouse_debugger) {
+		mouse_pos_dot.display().update({ x: e.clientX, y: e.clientY });
+		mouse_pos_text.display().update({ x: e.clientX, y: e.clientY, content: `(${e.clientX},${e.clientY})` });
+	}
+});
+
+let g1 = Anim.translate(3000, 3000, [389, 352], a);
+let g2 = Anim.translate(2000, 3000, [89, 202], b);
+
+anims.sort((a, b) => a.start - b.start);
+anims.push(0); // 利用 0 没有索引值, 所以 loop 内部的 while 判断条件在此时会返回 false
 loop();
